@@ -1,0 +1,6 @@
+name=[B41] Map Legend System
+poster=poster.png
+id=MapLegendSystem
+description=This mod adds a fully customizable, toggleable legend and information panel to the in-game map. Designed especially for server administrators, it allows you to display event details, symbol explanations and other map-related information in a clean, scalable side window.
+tags=Build 41,Misc,Multiplayer,Interface
+versionMin=41.0

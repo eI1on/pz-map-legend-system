@@ -1,0 +1,9 @@
+VERSION = 1,
+
+option MapLegend.Enabled
+{
+    type = boolean,
+    default = true,
+    page = MapLegend,
+    translation = MapLegend_Enabled,
+}

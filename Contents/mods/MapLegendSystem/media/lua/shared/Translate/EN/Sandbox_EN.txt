@@ -1,6 +1,0 @@
-Sandbox_EN = {
-  Sandbox_MapLegend = "Map Legend System",
-
-  Sandbox_MapLegend_Enabled = "Enabled",
-  Sandbox_MapLegend_Enabled_tooltip = "",
-}

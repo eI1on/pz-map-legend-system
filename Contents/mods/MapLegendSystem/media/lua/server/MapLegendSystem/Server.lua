@@ -62,11 +62,51 @@ MapLegendServer.sendMessagesToClient = function(player)
     sendServerCommand(player, CONFIG.MODULE_NAME, COMMANDS.RECEIVE_MESSAGES, data)
 end
 
+MapLegendServer.sendEditContentToClient = function(player)
+    local file = Utils.safeReadFile(CONFIG.MAP_LEGEND_FILE)
+    if file then
+        local lines = {}
+        local line = file:readLine()
+        while line do
+            table.insert(lines, line)
+            line = file:readLine()
+        end
+        file:close()
+
+        local content = table.concat(lines, "\r\n")
+        local data = { content = content }
+        sendServerCommand(player, CONFIG.MODULE_NAME, COMMANDS.RECEIVE_EDIT_CONTENT, data)
+    end
+end
+
+MapLegendServer.saveEditContent = function(content)
+    local file = Utils.safeWriteFile(CONFIG.MAP_LEGEND_FILE)
+    if file then
+        file:write(content)
+        file:close()
+
+        MapLegendServer.loadMessages()
+        MapLegendServer.notifyAllClientsOfEdit()
+        return true
+    end
+    return false
+end
+
+MapLegendServer.notifyAllClientsOfEdit = function()
+    sendServerCommand(CONFIG.MODULE_NAME, COMMANDS.UPDATE_AVAILABLE, {})
+end
+
 MapLegendServer.onClientCommand = function(module, command, player, args)
     if module ~= CONFIG.MODULE_NAME then return end
 
     if command == COMMANDS.REQUEST_MESSAGES then
         MapLegendServer.sendMessagesToClient(player)
+    elseif command == COMMANDS.REQUEST_EDIT_CONTENT then
+        MapLegendServer.sendEditContentToClient(player)
+    elseif command == COMMANDS.SAVE_EDIT_CONTENT then
+        if args and args.content then
+            MapLegendServer.saveEditContent(args.content)
+        end
     end
 end
 

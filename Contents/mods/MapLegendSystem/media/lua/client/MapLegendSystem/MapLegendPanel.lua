@@ -1,6 +1,116 @@
 local MapLegendClient = require("MapLegendSystem/Client")
 local Settings = require("MapLegendSystem/Settings")
+local MapLegendShared = require("MapLegendSystem/Shared")
 local MapLegendPanel = ISPanel:derive("MapLegendPanel")
+
+local MapLegendEditor = ISPanel:derive("MapLegendEditor")
+
+function MapLegendEditor:new(x, y, width, height)
+    local o = ISPanel.new(self, x, y, width, height)
+    o.x = x
+    o.y = y
+    o.width = width
+    o.height = height
+    o.title = "Map Legend Editor"
+    o.borderColor = { r = 0.4, g = 0.4, b = 0.4, a = 0.7 }
+    o.backgroundColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.9 }
+    o.padding = 10
+    o.modifiedContent = false
+    return o
+end
+
+function MapLegendEditor:initialise()
+    ISPanel.initialise(self)
+
+    local Utils = MapLegendShared.Utils
+    local CONFIG = MapLegendShared.CONFIG
+
+    local contentY = 30
+    local buttonHeight = 25
+    local contentHeight = self.height - contentY - self.padding - buttonHeight - 15
+
+    self.textBox = ISTextEntryBox:new("", self.padding, contentY, self.width - (self.padding * 2), contentHeight)
+    self.textBox:initialise();
+    self.textBox:instantiate();
+    self.textBox:setMultipleLine(true)
+    self.textBox:setEditable(true)
+    self:addChild(self.textBox)
+
+    local buttonWidth = 80
+    local buttonY = self.height - self.padding - buttonHeight
+    local totalButtonWidth = (buttonWidth * 2) + 10
+    local startX = (self.width - totalButtonWidth) / 2
+
+    self.saveButton = ISButton:new(startX, buttonY, buttonWidth, buttonHeight, "Save", self,
+        MapLegendEditor.onSaveClick)
+    self:addChild(self.saveButton)
+
+    self.cancelButton = ISButton:new(startX + buttonWidth + 10, buttonY, buttonWidth, buttonHeight, "Cancel", self,
+        MapLegendEditor.onCancelClick)
+    self:addChild(self.cancelButton)
+
+    if MapLegendClient.isSinglePlayer then
+        self:loadLocalContent()
+    else
+        self:requestServerContent()
+    end
+end
+
+function MapLegendEditor:loadLocalContent()
+    local Utils = MapLegendShared.Utils
+    local CONFIG = MapLegendShared.CONFIG
+
+    local fileContent = ""
+    local file = Utils.safeReadFile(CONFIG.MAP_LEGEND_FILE)
+    if file then
+        local lines = {}
+        local line = file:readLine()
+        while line do
+            table.insert(lines, line)
+            line = file:readLine()
+        end
+        fileContent = table.concat(lines, "\r\n")
+        file:close()
+    end
+    self.textBox:setText(fileContent)
+end
+
+function MapLegendEditor:requestServerContent()
+    MapLegendClient.requestEditContent(function(content)
+        self.textBox:setText(content)
+    end)
+end
+
+function MapLegendEditor:onSaveClick()
+    local content = self.textBox:getText()
+    local Utils = MapLegendShared.Utils
+    local CONFIG = MapLegendShared.CONFIG
+
+    if MapLegendClient.isSinglePlayer then
+        local file = Utils.safeWriteFile(CONFIG.MAP_LEGEND_FILE)
+        if file then
+            file:write(content)
+            file:close()
+            MapLegendClient.loadMessages()
+            self:close()
+        end
+    else
+        MapLegendClient.saveEditContent(content)
+        self:close()
+    end
+end
+
+function MapLegendEditor:onCancelClick()
+    self:close()
+end
+
+function MapLegendEditor:update()
+    ISPanel.update(self)
+end
+
+function MapLegendEditor:render()
+    ISPanel.render(self)
+end
 
 function MapLegendPanel:new(x, y, width, height)
     local o = ISPanel.new(self, x, y, width, height)
@@ -32,6 +142,18 @@ function MapLegendPanel:initialise()
     self.collapseButton.backgroundColor.a = 0;
     self.collapseButton:setImage(getTexture("media/ui/Panel_Icon_Collapse_Side.png"));
     self:addChild(self.collapseButton)
+
+    -- if (isClient() and isAdmin()) then
+    if isDebugEnabled() or (isClient() and isAdmin()) then
+        self.editorButton = ISButton:new(self.width - self.padding - 40, self.padding, 20, 20, "", self,
+            MapLegendPanel.onEditorButtonClick)
+        self.editorButton.anchorRight = false
+        self.editorButton.anchorLeft = true
+        self.editorButton.anchorTop = true
+        self.editorButton.backgroundColor = { r = 1, g = 0, b = 0, a = 0.5 };
+        self.editorButton:setImage(getTexture("media/ui/Panel_Icon_Legend_Editor.png"));
+        self:addChild(self.editorButton)
+    end
 
     self.settingsButton = ISButton:new(self.width - self.padding - 20, self.padding, 20, 20, "", self,
         MapLegendPanel.onSettingsButtonClick)
@@ -85,6 +207,10 @@ function MapLegendPanel:onCollapseButtonClick()
         self:setWidth(self.originalWidth)
         self:setHeight(self.originalHeight)
         self.collapseButton:setImage(getTexture("media/ui/Panel_Icon_Collapse_Side.png"))
+        if self.editorButton then
+            self.editorButton:setX(self.width - 2 * self.padding - 40)
+            self.editorButton:setVisible(true)
+        end
         self.settingsButton:setX(self.width - self.padding - 20)
         self.settingsButton:setVisible(true)
         self.richTextPanel:setVisible(true)
@@ -96,13 +222,18 @@ function MapLegendPanel:onCollapseButtonClick()
         Settings.update("collapsed", false)
     else
         self.isCollapsed = true
-        local collapsedWidth = 2 * 20 + (self.padding * 3)
+        local collapsedWidth = (self.editorButton and 3 or 2) * 20 + (self.padding * (self.editorButton and 4 or 3))
         local collapsedHeight = 20 + (self.padding * 2)
         self:setWidth(collapsedWidth)
         self:setHeight(collapsedHeight)
         self.collapseButton:setImage(getTexture("media/ui/Panel_Icon_Expand_Side.png"))
-        self.settingsButton:setX((self.padding * 2) + 20)
+        if self.editorButton then
+            self.editorButton:setX((self.padding * 2) + 20)
+            self.editorButton:setVisible(true)
+        end
+        self.settingsButton:setX((self.padding * (self.editorButton and 3 or 2)) + (self.editorButton and 40 or 20))
         self.settingsButton:setVisible(true)
+
         self.richTextPanel:setVisible(false)
 
         if self.currentPosition == "bottomLeft" then
@@ -126,6 +257,9 @@ function MapLegendPanel:setSizeScale(scale)
     if not self.isCollapsed then
         self:setWidth(newWidth)
         self:setHeight(newHeight)
+        if self.editorButton then
+            self.editorButton:setX(self.width - 2 * self.padding - 40)
+        end
         self.settingsButton:setX(self.width - self.padding - 20)
         self.richTextPanel:paginate()
 
@@ -208,6 +342,20 @@ function MapLegendPanel:onSettingsButtonClick()
     elseif self.currentPosition == "bottomLeft" then
         positionSubMenu:setOptionChecked(bottomLeftOption, true)
     end
+end
+
+function MapLegendPanel:onEditorButtonClick()
+    local editorWidth = 800
+    local editorHeight = 500
+    local screenWidth = getCore():getScreenWidth()
+    local screenHeight = getCore():getScreenHeight()
+    local editorX = (screenWidth - editorWidth) / 2
+    local editorY = (screenHeight - editorHeight) / 2
+
+    local editor = MapLegendEditor:new(editorX, editorY, editorWidth, editorHeight)
+    editor:initialise()
+    editor:addToUIManager()
+    editor:setAlwaysOnTop(true)
 end
 
 function MapLegendPanel:update()

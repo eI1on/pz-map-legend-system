@@ -11,6 +11,7 @@ MapLegendClient.lastCheckTime = 0
 MapLegendClient.callbacks = {}
 MapLegendClient.initialized = false
 MapLegendClient.isSinglePlayer = MapLegendShared.isSinglePlayer()
+MapLegendClient.editContentCallback = nil
 
 MapLegendClient.loadMessages = function()
     local file = Utils.safeReadFile(CONFIG.MAP_LEGEND_FILE)
@@ -70,6 +71,10 @@ MapLegendClient.onServerCommand = function(module, command, args)
         end
     elseif command == COMMANDS.UPDATE_AVAILABLE then
         MapLegendClient.requestMessages()
+    elseif command == COMMANDS.RECEIVE_EDIT_CONTENT then
+        if args and MapLegendClient.editContentCallback then
+            MapLegendClient.editContentCallback(args.content)
+        end
     end
 end
 
@@ -83,6 +88,25 @@ end
 MapLegendClient.notifyCallbacks = function()
     for _, callback in ipairs(MapLegendClient.callbacks) do
         callback(MapLegendClient.messages)
+    end
+end
+
+MapLegendClient.requestEditContent = function(callback)
+    if MapLegendClient.isSinglePlayer then return end
+
+    MapLegendClient.editContentCallback = callback
+    local player = getSpecificPlayer(0)
+    if player then
+        sendClientCommand(player, CONFIG.MODULE_NAME, COMMANDS.REQUEST_EDIT_CONTENT, {})
+    end
+end
+
+MapLegendClient.saveEditContent = function(content)
+    if MapLegendClient.isSinglePlayer then return end
+
+    local player = getSpecificPlayer(0)
+    if player then
+        sendClientCommand(player, CONFIG.MODULE_NAME, COMMANDS.SAVE_EDIT_CONTENT, { content = content })
     end
 end
 
